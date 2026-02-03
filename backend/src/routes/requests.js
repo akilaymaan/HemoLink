@@ -3,8 +3,7 @@ import { BloodRequest } from '../models/BloodRequest.js';
 import { Donor } from '../models/Donor.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { haversineKm } from '../utils/geo.js';
-import { computeEligibilityScore, getXAIReasons } from '../utils/eligibility.js';
-import { normalizeHealthToFlags } from '../utils/healthNlp.js';
+import { getEligibilityFromML, getHealthFlagsFromML, getEligibilityOverrideFromML } from '../services/mlClient.js';
 
 const router = Router();
 
@@ -67,34 +66,45 @@ router.get('/match', async (req, res) => {
       .lean();
 
     const now = new Date();
-    const withScore = donors.map((d) => {
-      const [dlng, dlat] = d.location?.coordinates || [0, 0];
-      const dist = hospitalLat != null && hospitalLng != null
-        ? haversineKm(dlat, dlng, hospitalLat, hospitalLng)
-        : 999;
-      const lastDon = d.lastDonationDate ? new Date(d.lastDonationDate) : null;
-      const daysSince = lastDon ? Math.floor((now - lastDon) / (1000 * 60 * 60 * 24)) : 999;
-      const healthFlags = normalizeHealthToFlags(d.healthSummary);
-      const score = computeEligibilityScore({
-        daysSinceLastDonation: daysSince,
-        distanceKm: dist,
-        isAvailableNow: d.isAvailableNow,
-        healthFlags,
-      });
-      const reasons = getXAIReasons({
-        daysSinceLastDonation: daysSince,
-        distanceKm: dist,
-        isAvailableNow: d.isAvailableNow,
-        eligibilityScore: score,
-      });
-      return {
-        ...d,
-        eligibilityScore: score,
-        xaiReasons: reasons,
-        distanceKm: Math.round(dist * 10) / 10,
-        compatibleAs: d.bloodGroup,
-      };
-    });
+    const withScore = await Promise.all(
+      donors.map(async (d) => {
+        const override = await getEligibilityOverrideFromML(d.healthSummary);
+        if (override.override) {
+          const [dlng, dlat] = d.location?.coordinates || [0, 0];
+          const dist = hospitalLat != null && hospitalLng != null
+            ? haversineKm(dlat, dlng, hospitalLat, hospitalLng)
+            : 999;
+          return {
+            ...d,
+            eligibilityScore: override.score,
+            xaiReasons: [override.reason],
+            distanceKm: Math.round(dist * 10) / 10,
+            compatibleAs: d.bloodGroup,
+          };
+        }
+        const [dlng, dlat] = d.location?.coordinates || [0, 0];
+        const dist = hospitalLat != null && hospitalLng != null
+          ? haversineKm(dlat, dlng, hospitalLat, hospitalLng)
+          : 999;
+        const lastDon = d.lastDonationDate ? new Date(d.lastDonationDate) : null;
+        const daysSince = lastDon ? Math.floor((now - lastDon) / (1000 * 60 * 60 * 24)) : 999;
+        const healthFlags = await getHealthFlagsFromML(d.healthSummary);
+        const { score, reasons } = await getEligibilityFromML({
+          daysSinceLastDonation: daysSince,
+          distanceKm: dist,
+          isAvailableNow: d.isAvailableNow,
+          healthFlags,
+          healthSummary: d.healthSummary,
+        });
+        return {
+          ...d,
+          eligibilityScore: score,
+          xaiReasons: reasons,
+          distanceKm: Math.round(dist * 10) / 10,
+          compatibleAs: d.bloodGroup,
+        };
+      })
+    );
 
     const withinRadius = radius > 0
       ? withScore.filter((d) => d.distanceKm <= radius)

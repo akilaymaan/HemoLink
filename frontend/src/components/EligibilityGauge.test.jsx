@@ -8,8 +8,8 @@ describe('EligibilityGauge', () => {
     expect(screen.getByText('Safe to Request')).toBeInTheDocument();
   });
 
-  it('shows Eligibility label', () => {
+  it('shows ML suitability score label', () => {
     render(<EligibilityGauge score={50} />);
-    expect(screen.getByText('Eligibility')).toBeInTheDocument();
+    expect(screen.getByText('ML suitability score')).toBeInTheDocument();
   });
 });

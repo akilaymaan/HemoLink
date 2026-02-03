@@ -6,7 +6,8 @@ export function EligibilityGauge({ score, verdict = '—' }) {
 
   return (
     <div className="card-nb inline-block p-4">
-      <div className="text-sm font-bold uppercase text-black/70">Eligibility</div>
+      <div className="text-sm font-bold uppercase text-black/70">ML suitability score</div>
+      <div className="text-xs text-black/60 mt-0.5">AI-powered eligibility (0–100)</div>
       <div className="flex items-center gap-4 mt-2">
         <div className="w-32 h-6 border-[3px] border-black overflow-hidden bg-gray-200">
           <div

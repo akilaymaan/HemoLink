@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { donorMe, donorCreateOrUpdate } from '../api';
 import { EligibilityGauge } from '../components/EligibilityGauge';
 import { LocationPicker } from '../components/LocationPicker';
+import { VoiceInputButton } from '../components/VoiceInputButton';
+import { reverseGeocode } from '../utils/geocode';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -22,6 +24,8 @@ export function DonorDashboard() {
     lastDonationDate: '',
     healthSummary: '',
   });
+  const [cityLoading, setCityLoading] = useState(false);
+  const [scoreJustUpdated, setScoreJustUpdated] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -50,6 +54,7 @@ export function DonorDashboard() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setScoreJustUpdated(false);
     try {
       const body = {
         bloodGroup: form.bloodGroup,
@@ -60,8 +65,11 @@ export function DonorDashboard() {
         lastDonationDate: form.lastDonationDate || undefined,
         healthSummary: form.healthSummary || undefined,
       };
-      const updated = await donorCreateOrUpdate(body);
-      setProfile(updated);
+      await donorCreateOrUpdate(body);
+      const fresh = await donorMe();
+      setProfile(fresh);
+      setScoreJustUpdated(true);
+      setTimeout(() => setScoreJustUpdated(false), 3000);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -86,9 +94,36 @@ export function DonorDashboard() {
       <h1 className="text-3xl font-bold border-4 border-black inline-block px-4 py-2 bg-[#95E1A3] shadow-[4px_4px_0_0_#000] mb-6">
         Donor profile
       </h1>
-      {(profile?.eligibilityScore != null || displayScore != null) && (
+      {saving && (
+        <div className="mb-6 card-nb border-2 border-[#C9B1FF] bg-[#C9B1FF]/20 p-4 flex items-center gap-3">
+          <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin shrink-0" aria-hidden />
+          <div>
+            <p className="font-bold text-black">AI is evaluating your eligibility</p>
+            <p className="text-sm text-black/70">Running ML model inference (NLP + scoring)…</p>
+          </div>
+        </div>
+      )}
+      {(profile?.eligibilityScore != null || displayScore != null) && !saving && (
         <div className="mb-6">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="text-sm text-black/70">Your profile is scored by our <strong>ML model</strong> (donation gap, distance, availability, health flags).</p>
+            {scoreJustUpdated && (
+              <span className="text-xs font-bold border-2 border-black px-2 py-0.5 bg-[#95E1A3] animate-pulse">
+                Score updated
+              </span>
+            )}
+          </div>
           <EligibilityGauge score={displayScore ?? profile?.eligibilityScore} verdict={verdict} />
+        </div>
+      )}
+      {(profile?.eligibilityScore != null || displayScore != null) && saving && (
+        <div className="mb-6 card-nb p-4 opacity-60">
+          <div className="text-sm font-bold uppercase text-black/70">ML suitability score</div>
+          <div className="text-xs text-black/60 mt-1">Computing…</div>
+          <div className="mt-2 h-6 border-[3px] border-black bg-gray-200 overflow-hidden">
+            <div className="h-full w-1/3 bg-[#C9B1FF] animate-pulse" style={{ minWidth: 4 }} />
+          </div>
+          <div className="mt-2 text-2xl font-bold text-black/50">—%</div>
         </div>
       )}
       <form onSubmit={handleSubmit} className="card-nb space-y-4">
@@ -106,16 +141,23 @@ export function DonorDashboard() {
         </div>
         <div>
           <label className="block font-bold mb-1">City</label>
-          <input
-            type="text"
-            value={form.city}
-            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-            className="input-nb"
-            placeholder="e.g. Mangalore"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={form.city}
+              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+              className="input-nb flex-1 min-w-[180px]"
+              placeholder="Set by map pin, voice, or type here"
+            />
+            <VoiceInputButton
+              onResult={(text) => setForm((f) => ({ ...f, city: text }))}
+              title="Say your city name"
+            />
+            {cityLoading && <span className="text-xs text-black/60">Looking up city…</span>}
+          </div>
         </div>
         <LocationPicker
-          label="Your location (India) – search or click map"
+          label="Your location (India) – click map to pin; city is set automatically"
           lat={form.lat || undefined}
           lng={form.lng || undefined}
           onSelect={(lat, lng) => setForm((f) => ({
@@ -123,6 +165,15 @@ export function DonorDashboard() {
             lat: lat !== undefined && lat !== null && lat !== '' ? String(lat) : '',
             lng: lng !== undefined && lng !== null && lng !== '' ? String(lng) : '',
           }))}
+          onMapSelect={async (latNum, lngNum) => {
+            setCityLoading(true);
+            try {
+              const city = await reverseGeocode(latNum, lngNum);
+              if (city) setForm((f) => ({ ...f, city }));
+            } finally {
+              setCityLoading(false);
+            }
+          }}
         />
         <div>
           <label className="block font-bold mb-1">Last donation date</label>
@@ -135,13 +186,21 @@ export function DonorDashboard() {
         </div>
         <div>
           <label className="block font-bold mb-1">Health summary (optional)</label>
-          <input
-            type="text"
-            value={form.healthSummary}
-            onChange={(e) => setForm((f) => ({ ...f, healthSummary: e.target.value }))}
-            className="input-nb"
-            placeholder="e.g. No illness"
-          />
+          <p className="text-xs text-black/60 mb-1">Analyzed by <strong>NLP</strong> for eligibility (e.g. recent illness, diabetes, medication). Use voice for faster filling.</p>
+          <div className="flex flex-wrap items-start gap-2">
+            <input
+              type="text"
+              value={form.healthSummary}
+              onChange={(e) => setForm((f) => ({ ...f, healthSummary: e.target.value }))}
+              className="input-nb flex-1 min-w-[200px]"
+              placeholder="e.g. No illness, or: had fever last week"
+            />
+            <VoiceInputButton
+              onResult={(text) => setForm((f) => ({ ...f, healthSummary: (f.healthSummary || '').trim() ? `${(f.healthSummary || '').trim()} ${text}` : text }))}
+              continuous
+              title="Dictate health summary (click again for more)"
+            />
+          </div>
         </div>
         <label className="flex items-center gap-2 font-bold cursor-pointer">
           <input
@@ -152,8 +211,15 @@ export function DonorDashboard() {
           />
           I am available to donate now
         </label>
-        <button type="submit" disabled={saving} className="btn-nb btn-nb-primary">
-          {saving ? 'Saving…' : 'Save profile'}
+        <button type="submit" disabled={saving} className="btn-nb btn-nb-primary flex items-center justify-center gap-2">
+          {saving ? (
+            <>
+              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+              Running ML inference…
+            </>
+          ) : (
+            'Save profile'
+          )}
         </button>
       </form>
     </div>

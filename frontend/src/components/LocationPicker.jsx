@@ -13,10 +13,12 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-export function LocationPicker({ lat, lng, onSelect, label = 'Location (India)', showRadius, radiusKm, onRadiusChange }) {
+export function LocationPicker({ lat, lng, onSelect, onMapSelect, label = 'Location (India)', showRadius, radiusKm, onRadiusChange }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
+  const onMapSelectRef = useRef(onMapSelect);
+  onMapSelectRef.current = onMapSelect;
 
   const initialLat = lat ? Number(lat) : INDIA_CENTER[0];
   const initialLng = lng ? Number(lng) : INDIA_CENTER[1];
@@ -31,22 +33,27 @@ export function LocationPicker({ lat, lng, onSelect, label = 'Location (India)',
     }).addTo(map);
 
     map.setMaxBounds(INDIA_BOUNDS.pad(0.1));
-    const updateMarker = (latlng) => {
+    const notifyMapSelect = (latlng) => {
+      onMapSelectRef.current?.(latlng.lat, latlng.lng);
+    };
+    const updateMarker = (latlng, fromUserInteraction = false) => {
       if (markerRef.current) markerRef.current.setLatLng(latlng);
       else {
         markerRef.current = L.marker(latlng, { draggable: true }).addTo(map);
         markerRef.current.on('dragend', () => {
           const pos = markerRef.current.getLatLng();
           onSelect(pos.lat, pos.lng);
+          notifyMapSelect(pos);
         });
       }
       onSelect(latlng.lat, latlng.lng);
+      if (fromUserInteraction) notifyMapSelect(latlng);
     };
 
-    map.on('click', (e) => updateMarker(e.latlng));
+    map.on('click', (e) => updateMarker(e.latlng, true));
 
     if (lat && lng) {
-      updateMarker(L.latLng(Number(lat), Number(lng)));
+      updateMarker(L.latLng(Number(lat), Number(lng)), false);
     }
 
     mapInstanceRef.current = map;

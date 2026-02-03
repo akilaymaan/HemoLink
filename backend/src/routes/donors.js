@@ -3,8 +3,7 @@ import { Donor } from '../models/Donor.js';
 import { User } from '../models/User.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { haversineKm } from '../utils/geo.js';
-import { computeEligibilityScore, getXAIReasons } from '../utils/eligibility.js';
-import { normalizeHealthToFlags } from '../utils/healthNlp.js';
+import { getEligibilityFromML, getHealthFlagsFromML, getEligibilityOverrideFromML } from '../services/mlClient.js';
 
 const router = Router();
 
@@ -41,8 +40,41 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 router.get('/me', authMiddleware, async (req, res) => {
-  const donor = await Donor.findOne({ user: req.user._id }).populate('user', 'name email');
-  res.json({ donor: donor || null });
+  try {
+    const donor = await Donor.findOne({ user: req.user._id }).populate('user', 'name email').lean();
+    if (!donor) return res.json({ donor: null });
+    const override = await getEligibilityOverrideFromML(donor.healthSummary);
+    if (override.override) {
+      return res.json({
+        donor: {
+          ...donor,
+          eligibilityScore: override.score,
+          xaiReasons: [override.reason],
+        },
+      });
+    }
+    const now = new Date();
+    const lastDon = donor.lastDonationDate ? new Date(donor.lastDonationDate) : null;
+    const daysSince = lastDon ? Math.floor((now - lastDon) / (1000 * 60 * 60 * 24)) : 999;
+    const distanceKm = 0;
+    const healthFlags = await getHealthFlagsFromML(donor.healthSummary);
+    const { score, reasons } = await getEligibilityFromML({
+      daysSinceLastDonation: daysSince,
+      distanceKm,
+      isAvailableNow: donor.isAvailableNow,
+      healthFlags,
+      healthSummary: donor.healthSummary,
+    });
+    res.json({
+      donor: {
+        ...donor,
+        eligibilityScore: score,
+        xaiReasons: reasons,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.get('/', async (req, res) => {
@@ -70,30 +102,36 @@ router.get('/', async (req, res) => {
     }
 
     const now = new Date();
-    const withScore = donors.map((d) => {
-      const lastDon = d.lastDonationDate ? new Date(d.lastDonationDate) : null;
-      const daysSince = lastDon ? Math.floor((now - lastDon) / (1000 * 60 * 60 * 24)) : 999;
-      const dist = d._distanceKm ?? 999;
-      const healthFlags = normalizeHealthToFlags(d.healthSummary);
-      const score = computeEligibilityScore({
-        daysSinceLastDonation: daysSince,
-        distanceKm: dist,
-        isAvailableNow: d.isAvailableNow,
-        healthFlags,
-      });
-      const reasons = getXAIReasons({
-        daysSinceLastDonation: daysSince,
-        distanceKm: dist,
-        isAvailableNow: d.isAvailableNow,
-        eligibilityScore: score,
-      });
-      return {
-        ...d,
-        eligibilityScore: score,
-        xaiReasons: reasons,
-        distanceKm: d._distanceKm != null ? Math.round(d._distanceKm * 10) / 10 : null,
-      };
-    });
+    const withScore = await Promise.all(
+      donors.map(async (d) => {
+        const override = await getEligibilityOverrideFromML(d.healthSummary);
+        if (override.override) {
+          return {
+            ...d,
+            eligibilityScore: override.score,
+            xaiReasons: [override.reason],
+            distanceKm: d._distanceKm != null ? Math.round(d._distanceKm * 10) / 10 : null,
+          };
+        }
+        const lastDon = d.lastDonationDate ? new Date(d.lastDonationDate) : null;
+        const daysSince = lastDon ? Math.floor((now - lastDon) / (1000 * 60 * 60 * 24)) : 999;
+        const dist = d._distanceKm ?? 999;
+        const healthFlags = await getHealthFlagsFromML(d.healthSummary);
+        const { score, reasons } = await getEligibilityFromML({
+          daysSinceLastDonation: daysSince,
+          distanceKm: dist,
+          isAvailableNow: d.isAvailableNow,
+          healthFlags,
+          healthSummary: d.healthSummary,
+        });
+        return {
+          ...d,
+          eligibilityScore: score,
+          xaiReasons: reasons,
+          distanceKm: d._distanceKm != null ? Math.round(d._distanceKm * 10) / 10 : null,
+        };
+      })
+    );
 
     res.json(withScore);
   } catch (e) {

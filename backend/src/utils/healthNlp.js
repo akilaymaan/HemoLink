@@ -23,6 +23,10 @@ const RULES = [
     flag: 'medication',
     keywords: ['medication', 'medicines', 'on drugs', 'antibiotics', 'treatment'],
   },
+  {
+    flag: 'serious_condition',
+    keywords: ['cancer', 'chemotherapy', 'hiv', 'aids', 'hepatitis', 'heart disease', 'stroke', 'major surgery', 'leukemia', 'lymphoma', 'tumor', 'malignant'],
+  },
 ];
 
 function normalizeWord(s) {

@@ -13,9 +13,12 @@ export function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b-4 border-black bg-[#4ECDC4] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-        <Link to="/" className="font-bold text-xl text-black no-underline">
-          HemoLink
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to="/" className="font-bold text-xl text-black no-underline">
+            HemoLink
+          </Link>
+          <span className="text-xs border-2 border-black px-2 py-0.5 bg-white/80 font-semibold hidden sm:inline">AI · ML · NLP</span>
+        </div>
         <nav className="flex items-center gap-3">
           <Link to="/request" className="font-semibold text-black no-underline border-2 border-black px-3 py-1.5 bg-[#FFE66D] shadow-[3px_3px_0_0_#000] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000]">
             Emergency SOS

@@ -4,6 +4,7 @@ import Tesseract from 'tesseract.js';
 import { requestMatch, requestCreate } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { LocationPicker } from '../components/LocationPicker';
+import { XAIReasons } from '../components/XAIReasons';
 import { parseRequisitionText } from '../utils/ocrRequisition';
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -166,9 +167,13 @@ export function RequestBlood() {
       </form>
       {result && (
         <div className="space-y-4">
-          <h2 className="text-xl font-bold border-2 border-black inline-block px-3 py-1 bg-[#4ECDC4]">
-            Matched donors ({result.donors?.length ?? 0})
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold border-2 border-black inline-block px-3 py-1 bg-[#4ECDC4]">
+              Matched donors ({result.donors?.length ?? 0})
+            </h2>
+            <span className="text-xs border-2 border-black px-2 py-1 bg-[#FFE66D] font-semibold">Ranked by AI/ML</span>
+          </div>
+          <p className="text-sm text-black/70">Each donor has an <strong>ML suitability score</strong> and <strong>Explainable AI (XAI)</strong> reasons.</p>
           {result.donors?.length === 0 ? (
             <p className="card-nb">No donors found in range. Try widening location or check O- as universal.</p>
           ) : (
@@ -183,17 +188,11 @@ export function RequestBlood() {
                     <p className="text-sm mt-1">{d.distanceKm} km away</p>
                   )}
                   <div className="mt-2">
-                    <span className="font-bold text-sm">Score: </span>
+                    <span className="font-bold text-sm">ML suitability score: </span>
                     <span className="font-bold">{d.eligibilityScore}%</span>
                   </div>
                   {d.xaiReasons?.length > 0 && (
-                    <ul className="mt-2 flex flex-wrap gap-1 list-none p-0">
-                      {d.xaiReasons.map((r, i) => (
-                        <li key={i} className="border-2 border-black px-2 py-0.5 bg-[#C9B1FF] text-sm font-medium">
-                          {r}
-                        </li>
-                      ))}
-                    </ul>
+                    <XAIReasons reasons={d.xaiReasons} />
                   )}
                 </li>
               ))}
