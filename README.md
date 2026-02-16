@@ -167,18 +167,6 @@ akil/
 
 ---
 
-## What’s real vs local/mocked
-
-See **[MOCKED.md](MOCKED.md)** for details. Summary:
-
-- **ML & NLP:** When the **ML service** is running and `ML_SERVICE_URL` is set, the backend uses **RandomForest** scoring and **NLTK** (or **Gemini**) for health flags and XAI reasons. Otherwise it uses **rule-based fallback** in Node.
-- **Maps / geo:** **Haversine** distance; **Leaflet + OpenStreetMap** (no API key). City can be set by **reverse geocoding** (Nominatim) when pinning the map.
-- **Voice:** **Web Speech API** for donor form (city, health summary) in supported browsers (e.g. Chrome).
-- **OCR:** **Tesseract.js** in the browser for scanning requisition images (blood group, hospital).
-- **DB / auth:** Local **MongoDB**; **JWT** auth.
-
----
-
 ## Environment
 
 - **Backend** (`.env`): `PORT`, `MONGODB_URI`, `JWT_SECRET`, optional `ML_SERVICE_URL`, `ML_SERVICE_TIMEOUT_MS`.
