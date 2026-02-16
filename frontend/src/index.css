@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Vibrant neobrutalism theme */
+:root {
+  --nb-black: #0f0f0f;
+  --nb-yellow: #FFE66D;
+  --nb-cyan: #4ECDC4;
+  --nb-pink: #FF6B9D;
+  --nb-green: #95E1A3;
+  --nb-orange: #FFB347;
+  --nb-purple: #C9B1FF;
+  --nb-red: #FF6B6B;
+  --nb-shadow: 4px 4px 0 var(--nb-black);
+  --nb-border: 3px solid var(--nb-black);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background: var(--nb-yellow);
+  color: var(--nb-black);
+}
+
+@layer components {
+  .btn-nb {
+    @apply font-bold px-5 py-2.5 border-[3px] border-black bg-white;
+    box-shadow: 4px 4px 0 var(--nb-black);
+  }
+
+  .btn-nb:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--nb-black);
+  }
+
+  .btn-nb-primary {
+    background: var(--nb-cyan);
+  }
+
+  .btn-nb-danger {
+    background: var(--nb-red);
+    color: white;
+  }
+
+  .card-nb {
+    @apply border-[3px] border-black p-4 bg-white;
+    box-shadow: var(--nb-shadow);
+  }
+
+  .input-nb {
+    @apply border-[3px] border-black px-3 py-2 w-full font-medium;
+    box-shadow: 2px 2px 0 var(--nb-black);
+  }
+
+  .input-nb:focus {
+    @apply outline-none;
+    box-shadow: 4px 4px 0 var(--nb-black);
+  }
+}
